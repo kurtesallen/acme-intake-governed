@@ -49,6 +49,16 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y terraform
           terraform -version
+      
+
+      # -----------------------------
+      # TERRAFORM INIT
+      # -----------------------------
+      - name: Terraform Init
+        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
+        run: terraform init -input=false
+
+
 
       # -----------------------------
       # TERRAFORM STATIC CHECKS
