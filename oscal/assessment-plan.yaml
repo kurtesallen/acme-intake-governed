@@ -1,0 +1,17 @@
+assessment-plan:
+  uuid: "acme-assessment-plan-001"
+  metadata:
+    title: "ACME Intake Platform — Assessment Plan"
+    version: "1.0.0"
+  import-profile:
+    href: "./profile.yaml"
+  assessment-subjects:
+    - type: "component"
+      href: "./component.yaml"
+  assessment-activities:
+    - uuid: "acme-activity-terraform-plan"
+      title: "Terraform Plan Evaluation"
+      description: "Evaluate Terraform plan using Rego policies."
+    - uuid: "acme-activity-drift-watch"
+      title: "Drift Detection"
+      description: "Nightly drift detection and policy evaluation."

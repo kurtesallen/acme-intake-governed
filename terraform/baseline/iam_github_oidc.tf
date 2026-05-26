@@ -1,0 +1,92 @@
+variable "github_repo" {
+  type    = string
+  default = "kurtesallen/acme-intake-governed-v2"
+}
+
+resource "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
+
+  client_id_list = [
+    "sts.amazonaws.com"
+  ]
+
+  thumbprint_list = [
+    "6938fd4d98bab03faadb97b34396831e3780aea1"
+  ]
+}
+
+resource "aws_iam_role" "github_grc_gate" {
+  name = "GitHubGrcGateRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = aws_iam_openid_connect_provider.github.arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          }
+          StringLike = {
+            "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:*"
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_policy" "github_grc_gate_policy" {
+  name        = "GitHubGrcGatePolicy"
+  description = "Permissions for GitHub GRC Gate workflow"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "S3Evidence"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          "arn:aws:s3:::acme-grc-evidence-846470648858",
+          "arn:aws:s3:::acme-grc-evidence-846470648858/*"
+        ]
+      },
+      {
+        Sid    = "KmsSign"
+        Effect = "Allow"
+        Action = [
+          "kms:Sign",
+          "kms:DescribeKey"
+        ]
+        Resource = "KMS_KEY_ARN"
+      },
+      {
+        Sid    = "TerraformRead"
+        Effect = "Allow"
+        Action = [
+          "ec2:Describe*",
+          "iam:GetRole",
+          "iam:ListRolePolicies",
+          "iam:ListAttachedRolePolicies",
+          "iam:GetPolicy",
+          "iam:GetPolicyVersion"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "github_grc_gate_attach" {
+  role       = aws_iam_role.github_grc_gate.name
+  policy_arn = aws_iam_policy.github_grc_gate_policy.arn
+}

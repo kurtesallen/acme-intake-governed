@@ -1,0 +1,13 @@
+profile:
+  uuid: "acme-profile-001"
+  metadata:
+    title: "ACME Intake Platform — Control Profile"
+    version: "1.0.0"
+  imports:
+    - href: "https://raw.githubusercontent.com/usnistgov/oscal-content/master/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json"
+      include-controls:
+        - id: "SC-13"   # Encryption
+        - id: "AU-2"    # Logging
+        - id: "AC-6"    # Least privilege
+        - id: "CM-6"    # Configuration settings
+        - id: "CP-9"    # Backups

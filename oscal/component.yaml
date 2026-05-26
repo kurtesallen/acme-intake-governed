@@ -1,0 +1,23 @@
+component-definition:
+  uuid: "acme-component-001"
+  metadata:
+    title: "ACME Intake Platform — Component Definition"
+    version: "1.0.0"
+  components:
+    - uuid: "acme-grc-gate"
+      type: "software"
+      title: "GRC Gate"
+      description: "Automated governance pipeline enforcing security and compliance controls."
+      control-implementations:
+        - source: "./profile.yaml"
+          implemented-requirements:
+            - control-id: "SC-13"
+              description: "Terraform policies enforce encryption at rest for all resources."
+            - control-id: "AU-2"
+              description: "Terraform and AWS CloudTrail ensure logging is enabled."
+            - control-id: "AC-6"
+              description: "IAM policies and Rego enforce least privilege."
+            - control-id: "CM-6"
+              description: "Terraform baseline defines configuration settings."
+            - control-id: "CP-9"
+              description: "S3 versioning and backups enforced via Terraform."

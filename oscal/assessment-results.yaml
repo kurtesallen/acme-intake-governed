@@ -1,0 +1,17 @@
+assessment-results:
+  uuid: "acme-assessment-results-001"
+  metadata:
+    title: "ACME Intake Platform — Assessment Results"
+    version: "1.0.0"
+  import-profile:
+    href: "./profile.yaml"
+  results:
+    - uuid: "acme-result-001"
+      title: "GRC Gate Results"
+      description: "Automated assessment results from GRC Gate workflow."
+      observations:
+        - uuid: "obs-plan"
+          description: "Terraform plan evaluated by Rego policies."
+          collected-evidence:
+            - href: "s3://acme-evidence-dev/dev/20260526/3f9a1c2/plan.json"
+            - href: "s3://acme-evidence-dev/dev/20260526/3f9a1c2/plan.sig"
