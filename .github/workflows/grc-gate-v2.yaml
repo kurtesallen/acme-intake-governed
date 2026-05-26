@@ -99,11 +99,6 @@ jobs:
             -p policy/terraform \
             -p policy/tests
 
-
-
-      - name: Run Rego Unit Tests
-        run: conftest test policy/tests
-
       # -----------------------------
       # EVIDENCE SIGNING (KMS)
       # -----------------------------
