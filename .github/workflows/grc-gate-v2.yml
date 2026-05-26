@@ -104,4 +104,3 @@ jobs:
       - name: OSCAL Validation (Optional)
         run: |
           echo "TODO: Add oscal-validator here"
-
