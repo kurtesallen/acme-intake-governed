@@ -33,7 +33,19 @@ jobs:
 
       - name: Export AWS Region for Terraform
         run: echo "AWS_REGION=us-east-1" >> $GITHUB_ENV
-
+      
+      # -----------------------------
+      # INSTALL TERRAFORM
+      # -----------------------------
+      - name: Install Terraform
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y wget unzip
+          wget https://releases.hashicorp.com/terraform/1.7.5/terraform_1.7.5_linux_amd64.zip
+          unzip terraform_1.7.5_linux_amd64.zip
+          sudo mv terraform /usr/local/bin/
+          terraform -version
+      
       # -----------------------------
       # TERRAFORM STATIC CHECKS
       # -----------------------------
