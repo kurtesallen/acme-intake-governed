@@ -95,7 +95,10 @@ jobs:
 
       - name: Policy Checks
         run: |
-          conftest test terraform/environments/${{ env.ENVIRONMENT }}/plan.json -p policy/terraform
+          conftest test terraform/environments/${{ env.ENVIRONMENT }}/plan.json \
+            -p policy/terraform \
+            -p policy/tests
+
 
 
       - name: Run Rego Unit Tests
