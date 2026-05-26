@@ -93,8 +93,10 @@ jobs:
           tar -xzf conftest_0.45.0_Linux_x86_64.tar.gz
           sudo mv conftest /usr/local/bin/
 
-      - name: Run Policy Checks
-        run: conftest test terraform/environments/${{ env.ENVIRONMENT }}/plan.json --policy policy/terraform
+      - name: Policy Checks
+        run: |
+          conftest test terraform/environments/${{ env.ENVIRONMENT }}/plan.json -p policy/terraform
+
 
       - name: Run Rego Unit Tests
         run: conftest test policy/tests
