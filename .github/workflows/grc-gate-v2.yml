@@ -21,6 +21,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # -----------------------------
+      # AWS CREDENTIALS (FIXED)
+      # -----------------------------
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -28,24 +31,36 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
+      - name: Export AWS Region for Terraform
+        run: echo "AWS_REGION=us-east-1" >> $GITHUB_ENV
+
+      # -----------------------------
+      # TERRAFORM STATIC CHECKS
+      # -----------------------------
       - name: Static Checks
+        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
         run: |
           terraform fmt -check -recursive
           terraform validate
-        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
 
+      # -----------------------------
+      # TERRAFORM PLAN
+      # -----------------------------
       - name: Terraform Init
-        run: terraform init -input=false
         working-directory: terraform/environments/${{ env.ENVIRONMENT }}
+        run: terraform init -input=false
 
       - name: Terraform Plan
-        run: terraform plan -out=tfplan.binary
         working-directory: terraform/environments/${{ env.ENVIRONMENT }}
+        run: terraform plan -out=tfplan.binary
 
       - name: Convert Plan to JSON
-        run: terraform show -json tfplan.binary > plan.json
         working-directory: terraform/environments/${{ env.ENVIRONMENT }}
+        run: terraform show -json tfplan.binary > plan.json
 
+      # -----------------------------
+      # POLICY CHECKS
+      # -----------------------------
       - name: Install Conftest
         run: |
           wget https://github.com/open-policy-agent/conftest/releases/download/v0.45.0/conftest_0.45.0_Linux_x86_64.tar.gz
@@ -58,23 +73,34 @@ jobs:
       - name: Run Rego Unit Tests
         run: conftest test policy/tests
 
+      # -----------------------------
+      # EVIDENCE SIGNING (KMS)
+      # -----------------------------
       - name: Sign Evidence (KMS)
+        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
         run: |
           aws kms sign \
             --key-id ${{ secrets.KMS_KEY_ID }} \
-            --message fileb://terraform/environments/${{ env.ENVIRONMENT }}/plan.json \
+            --message fileb://plan.json \
             --message-type RAW \
             --signing-algorithm RSASSA_PSS_SHA_256 \
             --output text > plan.sig
 
+      # -----------------------------
+      # EVIDENCE UPLOAD TO S3
+      # -----------------------------
       - name: Upload Evidence to S3
+        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
         run: |
-          aws s3 cp terraform/environments/${{ env.ENVIRONMENT }}/plan.json \
+          aws s3 cp plan.json \
             s3://${{ secrets.EVIDENCE_BUCKET }}/${{ env.ENVIRONMENT }}/$(date +%Y%m%d)/${{ github.sha }}/plan.json
 
           aws s3 cp plan.sig \
             s3://${{ secrets.EVIDENCE_BUCKET }}/${{ env.ENVIRONMENT }}/$(date +%Y%m%d)/${{ github.sha }}/plan.sig
 
+      # -----------------------------
+      # OSCAL VALIDATION (OPTIONAL)
+      # -----------------------------
       - name: OSCAL Validation (Optional)
         run: |
           echo "TODO: Add oscal-validator here"
