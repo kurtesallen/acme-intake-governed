@@ -1,0 +1,81 @@
+name: Drift Watch
+
+on:
+  schedule:
+    - cron: "0 3 * * *"   # 3 AM UTC nightly
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  ENVIRONMENT: prod
+
+jobs:
+  drift-watch:
+    name: Drift detection and governance
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Export AWS Region for Terraform
+        run: echo "AWS_REGION=us-east-1" >> $GITHUB_ENV
+
+      - name: Terraform Init
+        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
+        run: terraform init -input=false
+
+      - name: Terraform Plan (Drift Check)
+        id: plan
+        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
+        run: |
+          set +e
+          terraform plan -detailed-exitcode -out=tfplan.binary
+          EXIT_CODE=$?
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+          if [ $EXIT_CODE -eq 1 ]; then
+            echo "Terraform error"
+            exit 1
+          fi
+          exit 0
+
+      - name: Convert Plan to JSON
+        if: steps.plan.outputs.exit_code == '2'
+        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
+        run: terraform show -json tfplan.binary > drift-plan.json
+
+      - name: Install Conftest
+        if: steps.plan.outputs.exit_code == '2'
+        run: |
+          wget https://github.com/open-policy-agent/conftest/releases/download/v0.45.0/conftest_0.45.0_Linux_x86_64.tar.gz
+          tar -xzf conftest_0.45.0_Linux_x86_64.tar.gz
+          sudo mv conftest /usr/local/bin/
+
+      - name: Run Policy Checks on Drift
+        if: steps.plan.outputs.exit_code == '2'
+        run: conftest test terraform/environments/${{ env.ENVIRONMENT }}/drift-plan.json --policy policy/terraform
+
+      - name: Upload Drift Evidence to S3
+        if: steps.plan.outputs.exit_code == '2'
+        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
+        run: |
+          aws s3 cp drift-plan.json \
+            s3://${{ secrets.EVIDENCE_BUCKET }}/${{ env.ENVIRONMENT }}/drift/$(date +%Y%m%d)/${{ github.sha }}/drift-plan.json
+
+      - name: Open Drift Issue
+        if: steps.plan.outputs.exit_code == '2'
+        uses: peter-evans/create-issue-from-file@v5
+        with:
+          title: "Drift detected in ${{ env.ENVIRONMENT }} environment"
+          content-filepath: .github/drift-issue-template.md
+          labels: drift, grc
