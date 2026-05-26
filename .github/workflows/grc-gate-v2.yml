@@ -1,0 +1,81 @@
+name: GRC Gate v2
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  ENVIRONMENT: dev
+
+jobs:
+  grc-gate:
+    name: Governance, Risk & Compliance Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Static Checks
+        run: |
+          terraform fmt -check -recursive
+          terraform validate
+        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
+
+      - name: Terraform Init
+        run: terraform init -input=false
+        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
+
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan.binary
+        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
+
+      - name: Convert Plan to JSON
+        run: terraform show -json tfplan.binary > plan.json
+        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
+
+      - name: Install Conftest
+        run: |
+          wget https://github.com/open-policy-agent/conftest/releases/download/v0.45.0/conftest_0.45.0_Linux_x86_64.tar.gz
+          tar -xzf conftest_0.45.0_Linux_x86_64.tar.gz
+          sudo mv conftest /usr/local/bin/
+
+      - name: Run Policy Checks
+        run: conftest test terraform/environments/${{ env.ENVIRONMENT }}/plan.json --policy policy/terraform
+
+      - name: Run Rego Unit Tests
+        run: conftest test policy/tests
+
+      - name: Sign Evidence (KMS)
+        run: |
+          aws kms sign \
+            --key-id ${{ secrets.KMS_KEY_ID }} \
+            --message fileb://terraform/environments/${{ env.ENVIRONMENT }}/plan.json \
+            --message-type RAW \
+            --signing-algorithm RSASSA_PSS_SHA_256 \
+            --output text > plan.sig
+
+      - name: Upload Evidence to S3
+        run: |
+          aws s3 cp terraform/environments/${{ env.ENVIRONMENT }}/plan.json \
+            s3://${{ secrets.EVIDENCE_BUCKET }}/${{ env.ENVIRONMENT }}/$(date +%Y%m%d)/${{ github.sha }}/plan.json
+
+          aws s3 cp plan.sig \
+            s3://${{ secrets.EVIDENCE_BUCKET }}/${{ env.ENVIRONMENT }}/$(date +%Y%m%d)/${{ github.sha }}/plan.sig
+
+      - name: OSCAL Validation (Optional)
+        run: |
+          echo "TODO: Add oscal-validator here"
+
