@@ -110,13 +110,19 @@ jobs:
         working-directory: terraform/environments/${{ env.ENVIRONMENT }}
         run: |
           echo "Using KMS key: $KMS_KEY_ID"
+
+          # Hash the plan.json (KMS cannot sign large files directly)
+          openssl dgst -sha256 -binary plan.json > plan.sha256
+
+          # Sign the hash
           aws kms sign \
             --key-id "$KMS_KEY_ID" \
-            --message fileb://plan.json \
-            --message-type RAW \
+            --message fileb://plan.sha256 \
+            --message-type DIGEST \
             --signing-algorithm RSASSA_PSS_SHA_256 \
             --output text \
             --query Signature > plan.sig
+
 
       # -----------------------------
       # EVIDENCE UPLOAD TO S3
