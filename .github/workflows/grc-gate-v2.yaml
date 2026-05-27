@@ -17,6 +17,9 @@ jobs:
     name: Governance, Risk & Compliance Gate
     runs-on: ubuntu-latest
 
+    env:
+      KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -102,15 +105,18 @@ jobs:
       # -----------------------------
       # EVIDENCE SIGNING (KMS)
       # -----------------------------
-      - name: Sign Evidence (KMS)
+
+      - name: Sign Terraform Plan
         working-directory: terraform/environments/${{ env.ENVIRONMENT }}
         run: |
-          aws kms sign \
-            --key-id ${{ secrets.KMS_KEY_ID }} \
-            --message fileb://plan.json \
-            --message-type RAW \
-            --signing-algorithm RSASSA_PSS_SHA_256 \
-            --output text > plan.sig
+              echo "Using KMS key: $KMS_KEY_ID"
+              aws kms sign \
+                --key-id "$KMS_KEY_ID" \
+                --message fileb://plan.json \
+                --message-type RAW \
+                --signing-algorithm RSASSA_PSS_SHA_256 \
+                --output text \
+                --query Signature > plan.sig
 
       # -----------------------------
       # EVIDENCE UPLOAD TO S3
