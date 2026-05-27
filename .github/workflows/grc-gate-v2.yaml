@@ -19,6 +19,7 @@ jobs:
 
     env:
       KMS_KEY_ID: ${{ secrets.KMS_KEY_ID }}
+      EVIDENCE_BUCKET: ${{ secrets.EVIDENCE_BUCKET }}
 
     steps:
       - name: Checkout
@@ -31,7 +32,6 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::846470648858:role/GitHubGrcGateRole
-
           aws-region: us-east-1
 
       - name: Export AWS Region for Terraform
@@ -52,7 +52,6 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y terraform
           terraform -version
-      
 
       # -----------------------------
       # TERRAFORM INIT
@@ -60,8 +59,6 @@ jobs:
       - name: Terraform Init
         working-directory: terraform/environments/${{ env.ENVIRONMENT }}
         run: terraform init -input=false
-
-
 
       # -----------------------------
       # TERRAFORM STATIC CHECKS
@@ -75,10 +72,6 @@ jobs:
       # -----------------------------
       # TERRAFORM PLAN
       # -----------------------------
-      - name: Terraform Init
-        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
-        run: terraform init -input=false
-
       - name: Terraform Plan
         working-directory: terraform/environments/${{ env.ENVIRONMENT }}
         run: terraform plan -out=tfplan.binary
@@ -103,37 +96,63 @@ jobs:
             -p policy/tests
 
       # -----------------------------
-      # EVIDENCE SIGNING (KMS)
+      # EVIDENCE SIGNING (KMS + COSIGN)
       # -----------------------------
-
-      - name: Sign Terraform Plan
+      - name: Hash Terraform plan
         working-directory: terraform/environments/${{ env.ENVIRONMENT }}
         run: |
-          echo "Using KMS key: $KMS_KEY_ID"
-
-          # Hash the plan.json (KMS cannot sign large files directly)
           openssl dgst -sha256 -binary plan.json > plan.sha256
 
-          # Sign the hash
+      - name: Sign hash with KMS
+        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
+        run: |
           aws kms sign \
             --key-id "$KMS_KEY_ID" \
             --message fileb://plan.sha256 \
             --message-type DIGEST \
             --signing-algorithm RSASSA_PSS_SHA_256 \
             --output text \
-            --query Signature > plan.sig
+            --query Signature > plan.sig.kms
 
+      - name: Install Cosign
+        run: |
+          COSIGN_VERSION=v2.4.0
+          curl -sSL "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64" -o cosign
+          chmod +x cosign
+          sudo mv cosign /usr/local/bin/cosign
 
-      # -----------------------------
-      # EVIDENCE UPLOAD TO S3
-      # -----------------------------
-      - name: Upload Evidence to S3
+      - name: Cosign keyless sign plan hash
+        env:
+          COSIGN_EXPERIMENTAL: "true"
         working-directory: terraform/environments/${{ env.ENVIRONMENT }}
         run: |
-          aws s3 cp plan.json \
-            s3://${{ secrets.EVIDENCE_BUCKET }}/${{ env.ENVIRONMENT }}/$(date +%Y%m%d)/${{ github.sha }}/plan.json
-          aws s3 cp plan.sig \
-            s3://${{ secrets.EVIDENCE_BUCKET }}/${{ env.ENVIRONMENT }}/$(date +%Y%m%d)/${{ github.sha }}/plan.sig
+          base64 plan.sha256 > plan.sha256.b64
+          cosign sign-blob \
+            --yes \
+            --output-signature plan.sig.cosign \
+            plan.sha256.b64
+
+      # -----------------------------
+      # EVIDENCE BUNDLE + UPLOAD
+      # -----------------------------
+      - name: Build evidence bundle
+        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
+        run: |
+          mkdir -p evidence
+          cp plan.json plan.sha256 plan.sig.kms plan.sig.cosign evidence/
+          cat > evidence/metadata.json <<EOF
+          {
+            "commit": "${GITHUB_SHA}",
+            "workflow": "${GITHUB_WORKFLOW}",
+            "run_id": "${GITHUB_RUN_ID}",
+            "environment": "${{ env.ENVIRONMENT }}"
+          }
+          EOF
+
+      - name: Upload evidence bundle to S3
+        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
+        run: |
+          aws s3 cp evidence "s3://${{ env.EVIDENCE_BUCKET }}/runs/${GITHUB_RUN_ID}/" --recursive
 
       # -----------------------------
       # OSCAL VALIDATION
