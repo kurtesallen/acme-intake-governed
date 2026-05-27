@@ -9,3 +9,7 @@ output "logging_bucket" {
 output "cloudtrail_arn" {
   value = aws_cloudtrail.baseline.arn
 }
+
+output "evidence_signing_key_arn" {
+  value = aws_kms_key.evidence_signing.arn
+}

@@ -8,22 +8,39 @@ resource "aws_kms_key" "baseline" {
 
   tags = merge(var.tags, {
     "Control" = "SC-13"
+    "Purpose" = "BaselineEncryption"
+  })
+}
+
+# -----------------------------
+# Evidence Signing Key (KMS)
+# -----------------------------
+resource "aws_kms_key" "evidence_signing" {
+  description             = "ACME evidence signing key (asymmetric)"
+  key_usage               = "SIGN_VERIFY"
+  key_spec                = "RSA_2048"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+
+  tags = merge(var.tags, {
+    "Control" = "SC-13"
+    "Purpose" = "EvidenceSigning"
   })
 }
 
 # -----------------------------
 # S3 Logging Bucket (AU-2)
 # -----------------------------
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 resource "aws_s3_bucket" "logs" {
   bucket = "acme-${var.environment}-logs-${random_id.suffix.hex}"
 
   tags = merge(var.tags, {
     "Control" = "AU-2"
   })
-}
-
-resource "random_id" "suffix" {
-  byte_length = 4
 }
 
 resource "aws_s3_bucket_versioning" "logs" {
