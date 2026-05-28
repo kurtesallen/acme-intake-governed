@@ -59,3 +59,18 @@ resource "aws_cloudtrail" "baseline" {
     "Control" = "AU-2"
   })
 }
+
+# -------------------------------------------------------------------
+# Evidence Signing Key (Asymmetric RSA for KMS Sign API)
+# -------------------------------------------------------------------
+resource "aws_kms_key" "evidence_signing" {
+  description         = "Evidence signing key for GRC Gate"
+  key_usage           = "SIGN_VERIFY"
+  key_spec            = "RSA_2048"
+  enable_key_rotation = true
+
+  tags = {
+    Name = "evidence-signing-key"
+    GRC  = "true"
+  }
+}

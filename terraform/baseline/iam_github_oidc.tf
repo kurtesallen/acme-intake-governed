@@ -3,18 +3,20 @@ variable "github_repo" {
   default = "kurtesallen/acme-intake-governed-v2"
 }
 
-resource "aws_iam_openid_connect_provider" "github" {
-  url = "https://token.actions.githubusercontent.com"
+# ---------------------------------------------------------
+# GitHub OIDC Provider (REMOVED — already exists in AWS)
+# ---------------------------------------------------------
+# Terraform will NOT manage the provider.
+# The trust policy will reference the existing provider ARN.
+# ---------------------------------------------------------
 
-  client_id_list = [
-    "sts.amazonaws.com"
-  ]
-
-  thumbprint_list = [
-    "6938fd4d98bab03faadb97b34396831e3780aea1"
-  ]
+data "aws_iam_openid_connect_provider" "github" {
+  arn = "arn:aws:iam::846470648858:oidc-provider/token.actions.githubusercontent.com"
 }
 
+# ---------------------------------------------------------
+# IAM Role for GitHub GRC Gate
+# ---------------------------------------------------------
 resource "aws_iam_role" "github_grc_gate" {
   name = "GitHubGrcGateRole"
 
@@ -24,7 +26,7 @@ resource "aws_iam_role" "github_grc_gate" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = aws_iam_openid_connect_provider.github.arn
+          Federated = data.aws_iam_openid_connect_provider.github.arn
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
@@ -40,6 +42,9 @@ resource "aws_iam_role" "github_grc_gate" {
   })
 }
 
+# ---------------------------------------------------------
+# IAM Policy for GRC Gate
+# ---------------------------------------------------------
 resource "aws_iam_policy" "github_grc_gate_policy" {
   name        = "GitHubGrcGatePolicy"
   description = "Permissions for GitHub GRC Gate workflow"
@@ -67,7 +72,7 @@ resource "aws_iam_policy" "github_grc_gate_policy" {
           "kms:Sign",
           "kms:DescribeKey"
         ]
-        Resource = "KMS_KEY_ARN"
+        Resource = var.evidence_signing_key_arn
       },
       {
         Sid    = "TerraformRead"
@@ -86,6 +91,9 @@ resource "aws_iam_policy" "github_grc_gate_policy" {
   })
 }
 
+# ---------------------------------------------------------
+# Attach Policy to Role
+# ---------------------------------------------------------
 resource "aws_iam_role_policy_attachment" "github_grc_gate_attach" {
   role       = aws_iam_role.github_grc_gate.name
   policy_arn = aws_iam_policy.github_grc_gate_policy.arn
