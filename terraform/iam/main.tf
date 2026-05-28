@@ -1,22 +1,13 @@
-variable "github_repo" {
-  type    = string
-  default = "kurtesallen/acme-intake-governed-v2"
-}
-
-# ---------------------------------------------------------
-# GitHub OIDC Provider (REMOVED — already exists in AWS)
-# ---------------------------------------------------------
-# Terraform will NOT manage the provider.
-# The trust policy will reference the existing provider ARN.
-# ---------------------------------------------------------
-
+# =========================================================
+# GitHub OIDC Provider (existing in AWS)
+# =========================================================
 data "aws_iam_openid_connect_provider" "github" {
   arn = "arn:aws:iam::846470648858:oidc-provider/token.actions.githubusercontent.com"
 }
 
-# ---------------------------------------------------------
+# =========================================================
 # IAM Role for GitHub GRC Gate
-# ---------------------------------------------------------
+# =========================================================
 resource "aws_iam_role" "github_grc_gate" {
   name = "GitHubGrcGateRole"
 
@@ -42,9 +33,9 @@ resource "aws_iam_role" "github_grc_gate" {
   })
 }
 
-# ---------------------------------------------------------
+# =========================================================
 # IAM Policy for GRC Gate
-# ---------------------------------------------------------
+# =========================================================
 resource "aws_iam_policy" "github_grc_gate_policy" {
   name        = "GitHubGrcGatePolicy"
   description = "Permissions for GitHub GRC Gate workflow"
@@ -61,8 +52,8 @@ resource "aws_iam_policy" "github_grc_gate_policy" {
           "s3:ListBucket"
         ]
         Resource = [
-          "arn:aws:s3:::acme-grc-evidence-846470648858",
-          "arn:aws:s3:::acme-grc-evidence-846470648858/*"
+          "arn:aws:s3:::acme-grc-evidence-${data.aws_caller_identity.current.account_id}",
+          "arn:aws:s3:::acme-grc-evidence-${data.aws_caller_identity.current.account_id}/*"
         ]
       },
       {
@@ -91,9 +82,11 @@ resource "aws_iam_policy" "github_grc_gate_policy" {
   })
 }
 
-# ---------------------------------------------------------
+data "aws_caller_identity" "current" {}
+
+# =========================================================
 # Attach Policy to Role
-# ---------------------------------------------------------
+# =========================================================
 resource "aws_iam_role_policy_attachment" "github_grc_gate_attach" {
   role       = aws_iam_role.github_grc_gate.name
   policy_arn = aws_iam_policy.github_grc_gate_policy.arn
