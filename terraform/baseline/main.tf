@@ -1,6 +1,13 @@
-# -----------------------------
-# KMS CMK (SC-13 Encryption)
-# -----------------------------
+# =========================================================
+# Random Suffix
+# =========================================================
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
+# =========================================================
+# Baseline KMS CMK (SC-13 Encryption)
+# =========================================================
 resource "aws_kms_key" "baseline" {
   description             = "ACME baseline CMK for encryption"
   enable_key_rotation     = true
@@ -11,19 +18,15 @@ resource "aws_kms_key" "baseline" {
   })
 }
 
-# -----------------------------
+# =========================================================
 # S3 Logging Bucket (AU-2)
-# -----------------------------
+# =========================================================
 resource "aws_s3_bucket" "logs" {
   bucket = "acme-${var.environment}-logs-${random_id.suffix.hex}"
 
   tags = merge(var.tags, {
     "Control" = "AU-2"
   })
-}
-
-resource "random_id" "suffix" {
-  byte_length = 4
 }
 
 resource "aws_s3_bucket_versioning" "logs" {
@@ -45,9 +48,9 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
   }
 }
 
-# -----------------------------
+# =========================================================
 # CloudTrail Bucket Policy (Required)
-# -----------------------------
+# =========================================================
 data "aws_caller_identity" "current" {}
 
 resource "aws_s3_bucket_policy" "cloudtrail_logs" {
@@ -83,9 +86,9 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs" {
   })
 }
 
-# -----------------------------
+# =========================================================
 # CloudTrail (AU-2)
-# -----------------------------
+# =========================================================
 resource "aws_cloudtrail" "baseline" {
   name                          = "acme-${var.environment}-trail"
   s3_bucket_name                = aws_s3_bucket.logs.id
@@ -98,14 +101,14 @@ resource "aws_cloudtrail" "baseline" {
   })
 }
 
-# -------------------------------------------------------------------
-# Evidence Signing Key (Asymmetric RSA for KMS Sign API)
-# -------------------------------------------------------------------
+# =========================================================
+# Evidence Signing Key (Asymmetric RSA for GRC Gate)
+# =========================================================
 resource "aws_kms_key" "evidence_signing" {
-  description         = "Evidence signing key for GRC Gate"
-  key_usage           = "SIGN_VERIFY"
-  key_spec            = "RSA_2048"
-  enable_key_rotation = true
+  description                 = "Evidence signing key for GRC Gate"
+  key_usage                   = "SIGN_VERIFY"
+  customer_master_key_spec    = "RSA_2048"
+  enable_key_rotation         = true
 
   tags = {
     Name = "evidence-signing-key"
